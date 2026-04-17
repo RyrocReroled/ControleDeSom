@@ -12,7 +12,7 @@
         <div class="notification-banner-content">
           <span class="notification-icon">{{ notif.type === 'attention' ? '🔔' : 'ℹ️' }}</span>
           <div class="notification-message">
-            <strong v-if="notif.type === 'attention'">Atenção!</strong>
+            <strong v-if="notif.type === 'attention'">Atenção! </strong>
             <span>{{ notif.message }}</span>
           </div>
           <button class="notification-close" @click.stop="removeNotification(notif.id)">×</button>
@@ -20,102 +20,117 @@
       </div>
     </div>
 
-    <aside class="sidebar">
-      <div class="brand-card">
-        <span class="eyebrow">Controle de Som</span>
-        <h1>Mesa de auxiliares</h1>
-        <p>
-          Cada auxiliar e cada canal refletem em tempo real o estado salvo no
-          Firestore.
-        </p>
+    <!-- Navbar Lateral Desktop (sempre visível) -->
+    <nav class="sidebar-nav" :class="{ 'mobile-open': mobileMenuOpen }">
+      <div class="nav-header">
+        <div class="logo-area">
+          <div class="logo-text">
+            <span class="logo-title">Mesa de Som</span>
+            <span class="logo-subtitle">Auxiliares</span>
+          </div>
+        </div>
+        <!-- Botão de fechar no mobile quando menu está aberto -->
+        <button class="mobile-close-btn" v-if="isMobile && mobileMenuOpen" @click="closeMobileMenu">
+          ✕
+        </button>
       </div>
 
-      <section class="menu-card">
-        <div class="menu-header">
-          <div>
-            <span class="menu-label">Auxiliares</span>
-            <strong>{{ auxiliares.length }}</strong>
+      <div class="nav-content">
+        <div class="nav-section">
+          <div class="section-label">
+            <span>Auxiliares</span>
+            <span class="badge">{{ auxiliares.length }}</span>
           </div>
-          <span class="sync-badge">{{ syncLabel }}</span>
+          
+          <div class="nav-items">
+            <button
+              v-for="auxiliar in auxiliares"
+              :key="auxiliar.id"
+              class="nav-link"
+              :class="{ active: auxiliar.id === selectedAuxiliarId }"
+              @click="selectAuxiliar(auxiliar.id)"
+            >
+              <span class="nav-text">{{ auxiliar.id }}</span>
+              <span class="nav-badge" v-if="activeChannelsCount(auxiliar) > 0">
+                {{ activeChannelsCount(auxiliar) }}
+              </span>
+            </button>
+          </div>
         </div>
 
-        <nav v-if="auxiliares.length" class="auxiliar-nav" aria-label="Auxiliares">
-          <button
-            v-for="auxiliar in auxiliares"
-            :key="auxiliar.id"
-            type="button"
-            class="nav-item"
-            :class="{ active: auxiliar.id === selectedAuxiliarId }"
-            @click="selectedAuxiliarId = auxiliar.id"
+        <div class="nav-footer">
+          <div class="status-info">
+            <div class="status-dot" :class="{ syncing: pendingChannel }"></div>
+            <span class="status-text">{{ syncLabel }}</span>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Botão Hamburguer Mobile (visível apenas no mobile) -->
+    <button v-if="!mobileMenuOpen" class="mobile-menu-btn" @click="toggleMobileMenu">
+      <span class="hamburger-icon">
+        <span></span>
+        <span></span>
+        <span></span>
+      </span>
+    </button>
+
+    <!-- Overlay Mobile -->
+    <div class="mobile-overlay" v-if="mobileMenuOpen" @click="closeMobileMenu"></div>
+
+    <!-- Conteúdo Principal -->
+    <main class="main-content" :class="{ 'mobile-menu-open': mobileMenuOpen }">
+      <header class="content-header">
+        <div class="header-title">
+          <h1>{{ selectedAuxiliar ? selectedAuxiliar.id : 'Selecione um auxiliar' }}</h1>
+          <p class="header-description" v-if="selectedAuxiliar">
+            Controle dos canais 1 a 16
+          </p>
+        </div>
+
+        <div class="header-actions">
+          <div class="limits-card">
+            <span>Intervalo</span>
+            <strong>{{ globalLimits.min }} a {{ globalLimits.max }}</strong>
+          </div>
+
+          <button 
+            v-if="selectedAuxiliar" 
+            class="attention-btn"
+            @click="callAttention"
+            :disabled="isCallingAttention"
           >
-            <span>{{ auxiliar.id }}</span>
-            <small>{{ activeChannelsCount(auxiliar) }} canais com valor</small>
+            <span>🔔</span>
+            <span>Chamar Atenção</span>
           </button>
-        </nav>
-
-        <p v-else class="empty-message">
-          Nenhum documento foi encontrado na coleção <code>Auxiliares</code>.
-        </p>
-      </section>
-    </aside>
-
-    <main class="workspace">
-      <header class="workspace-header">
-        <div>
-          <span class="workspace-label">Auxiliar atual</span>
-          <h2>{{ selectedAuxiliar ? selectedAuxiliar.id : 'Aguardando auxiliar' }}</h2>
         </div>
-
-        <div class="limits-card">
-          <span>Intervalo atual</span>
-          <strong>{{ globalLimits.min }} a {{ globalLimits.max }}</strong>
-        </div>
-
-        <button 
-          v-if="selectedAuxiliar" 
-          class="call-attention-btn"
-          @click="callAttention"
-          :disabled="isCallingAttention"
-        >
-          <span class="btn-icon">🔔</span>
-          Chamar Atenção
-        </button>
       </header>
 
-      <section v-if="errorMessage" class="feedback-card error-card">
+      <section v-if="errorMessage" class="feedback-card error">
         {{ errorMessage }}
       </section>
 
-      <section v-else-if="!selectedAuxiliar" class="feedback-card">
-        Crie documentos como <code>Auxiliar1</code>, <code>Auxiliar2</code> e
-        assim por diante dentro da coleção <code>Auxiliares</code> para ver os
-        controles aparecerem aqui.
+      <section v-else-if="!selectedAuxiliar" class="feedback-card info">
+        <div class="feedback-icon">ℹ️</div>
+        <p>Crie documentos como <code>Auxiliar1</code>, <code>Auxiliar2</code> na coleção <code>Auxiliares</code></p>
       </section>
 
-      <section v-else class="console-card">
-        <div class="console-header">
-          <div>
-            <span class="workspace-label">Canais 1 a 16</span>
-            <p>
-              Ajuste os faders abaixo. Cada movimento grava no Firestore e a tela
-              é sincronizada para todos os usuários conectados.
-            </p>
-          </div>
-        </div>
-
+      <section v-else class="faders-container">
         <div class="faders-grid">
-          <article
+          <div
             v-for="channel in selectedAuxiliar.channels"
             :key="channel.key"
             class="fader-card"
             :data-auxiliar="selectedAuxiliar.id"
             :data-channel="channel.key"
           >
-            <span class="fader-index">Canal {{ channel.key }}</span>
+            <div class="fader-header">
+              <span class="channel-number">Canal {{ channel.key }}</span>
+            </div>
 
-            <div class="fader-track-wrap">
+            <div class="fader-wrapper">
               <input
-                :id="`channel-${selectedAuxiliar.id}-${channel.key}`"
                 class="fader-input"
                 type="range"
                 orient="vertical"
@@ -129,9 +144,14 @@
               />
             </div>
 
-            <strong class="fader-value">{{ channel.value }}</strong>
-            <small class="fader-limits">{{ channel.min }} / {{ channel.max }}</small>
-          </article>
+            <div class="fader-footer">
+              <strong class="current-value">{{ channel.value }}</strong>
+              <div class="value-range">
+                <span>{{ channel.min }}</span>
+                <span>{{ channel.max }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>
@@ -260,7 +280,9 @@ export default {
       currentDragFaderRect: null,
       notifications: [],
       isCallingAttention: false,
-      notificationTimeouts: new Map()
+      notificationTimeouts: new Map(),
+      isMobile: false,
+      mobileMenuOpen: false
     }
   },
   computed: {
@@ -278,15 +300,20 @@ export default {
       return this.limitsMap.global
     },
     syncLabel() {
-      return this.pendingChannel ? 'Sincronizando...' : 'Ao vivo'
+      return this.pendingChannel ? 'Sincronizando...' : 'Sincronizado'
     }
   },
   mounted() {
+    this.checkMobile()
+    window.addEventListener('resize', this.checkMobile)
+    
     this.subscribeToLimits()
     this.subscribeToAuxiliares()
     this.subscribeToNotifications()
   },
   beforeUnmount() {
+    window.removeEventListener('resize', this.checkMobile)
+    
     if (this.unsubscribeAuxiliares) {
       this.unsubscribeAuxiliares()
     }
@@ -305,6 +332,32 @@ export default {
     this.stopDrag()
   },
   methods: {
+    checkMobile() {
+      this.isMobile = window.innerWidth <= 768
+      if (!this.isMobile) {
+        this.mobileMenuOpen = false
+        document.body.style.overflow = ''
+      }
+    },
+    toggleMobileMenu() {
+      if (!this.isMobile) return
+      this.mobileMenuOpen = !this.mobileMenuOpen
+      if (this.mobileMenuOpen) {
+        document.body.style.overflow = 'hidden'
+      } else {
+        document.body.style.overflow = ''
+      }
+    },
+    closeMobileMenu() {
+      this.mobileMenuOpen = false
+      document.body.style.overflow = ''
+    },
+    selectAuxiliar(id) {
+      this.selectedAuxiliarId = id
+      if (this.isMobile) {
+        this.closeMobileMenu()
+      }
+    },
     subscribeToLimits() {
       const limitsRef = doc(db, 'MaxMin', 'ControleVolumes')
 
@@ -321,7 +374,7 @@ export default {
         },
         () => {
           this.errorMessage =
-            'Nao foi possivel ler MaxMin/ControleVolumes. Verifique as permissoes do Firestore.'
+            'Erro ao carregar limites. Verifique as permissões do Firestore.'
         }
       )
     },
@@ -345,7 +398,7 @@ export default {
         },
         () => {
           this.errorMessage =
-            'Nao foi possivel ler a colecao Auxiliares. Verifique as permissoes do Firestore.'
+            'Erro ao carregar auxiliares. Verifique as permissões do Firestore.'
         }
       )
     },
@@ -490,7 +543,7 @@ export default {
 
         this.errorMessage =
           error?.message ||
-          `Nao foi possivel atualizar o canal ${channelKey} do documento ${auxiliarId}.`
+          `Erro ao atualizar canal ${channelKey} do auxiliar ${auxiliarId}.`
       } finally {
         if (this.pendingChannel === channelId) {
           this.pendingChannel = ''
@@ -568,77 +621,463 @@ export default {
 
 <style>
 :root {
-  color-scheme: light;
-  --bg: #e9ddd0;
-  --bg-deep: #d7c5b4;
-  --panel: rgba(255, 251, 245, 0.76);
-  --panel-strong: rgba(255, 248, 238, 0.92);
-  --line: rgba(75, 56, 38, 0.14);
-  --text: #2d241b;
-  --muted: #6f655c;
-  --accent: #bc5f2c;
-  --accent-strong: #8f4218;
+  --primary: #bc5f2c;
+  --primary-dark: #8f4218;
+  --primary-light: #e8a87b;
+  --dark: #2d241b;
+  --gray: #6f655c;
+  --gray-light: #e0d8d0;
   --success: #256b55;
-  --error: #9a2f2f;
-  --shadow: 0 24px 60px rgba(61, 43, 24, 0.18);
+  --error: #c53030;
+  --bg: #f5f0ea;
+  --sidebar-width: 260px;
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
-html,
-body,
-#app {
-  min-height: 100%;
-}
-
 body {
-  margin: 0;
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
-  color: var(--text);
-  background:
-    radial-gradient(circle at top left, rgba(188, 95, 44, 0.22), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(37, 107, 85, 0.18), transparent 20%),
-    linear-gradient(135deg, var(--bg), var(--bg-deep));
-}
-
-button,
-input {
-  font: inherit;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: linear-gradient(135deg, #f5f0ea 0%, #e8dfd7 100%);
+  color: var(--dark);
+  overflow-x: hidden;
 }
 
 .app-shell {
+  display: flex;
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 24px;
-  padding: 24px;
+  position: relative;
 }
 
-/* CONTAINER DE NOTIFICAÇÕES - AGORA OCUPA LARGURA TOTAL */
+/* Navbar Lateral Desktop - Sempre visível */
+.sidebar-nav {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: var(--sidebar-width);
+  background: #2d241b;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.nav-header {
+  padding: 24px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.logo-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+}
+
+.logo-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Botão de fechar mobile */
+.mobile-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.mobile-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.nav-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px 0;
+  overflow-y: auto;
+}
+
+.nav-section {
+  padding: 0 16px;
+}
+
+.section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  margin-bottom: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.badge {
+  background: rgba(188, 95, 44, 0.3);
+  color: var(--primary-light);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.nav-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: var(--transition);
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.nav-link.active {
+  background: var(--primary);
+  color: white;
+}
+
+.nav-text {
+  flex: 1;
+}
+
+.nav-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
+}
+
+.nav-footer {
+  padding: 20px 16px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+}
+
+.status-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  transition: var(--transition);
+}
+
+.status-dot.syncing {
+  background: #f59e0b;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.status-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Conteúdo Principal Desktop */
+.main-content {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  padding: 24px 32px;
+  transition: var(--transition);
+  min-height: 100vh;
+}
+
+/* Header */
+.content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.header-title h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 8px;
+}
+
+.header-description {
+  color: var(--gray);
+  font-size: 14px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.limits-card {
+  background: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.limits-card span {
+  display: block;
+  font-size: 11px;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.limits-card strong {
+  font-size: 18px;
+  color: var(--primary);
+}
+
+.attention-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: var(--primary);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.attention-btn:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.attention-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Feedback Cards */
+.feedback-card {
+  background: white;
+  border-radius: 12px;
+  padding: 48px 32px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.feedback-card.error {
+  background: #fee;
+  color: var(--error);
+  border-left: 3px solid var(--error);
+}
+
+.feedback-card.info {
+  background: #e8f0fe;
+}
+
+.feedback-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+/* Faders Grid */
+.faders-container {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.faders-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 1600px) {
+  .faders-grid {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}
+
+@media (max-width: 1200px) {
+  .faders-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .faders-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .faders-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.fader-card {
+  background: #faf8f6;
+  border-radius: 8px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  transition: var(--transition);
+  border: 1px solid #e8e0d8;
+}
+
+.fader-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.fader-header {
+  text-align: center;
+}
+
+.channel-number {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray);
+}
+
+.fader-wrapper {
+  height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.fader-input {
+  -webkit-appearance: slider-vertical;
+  width: 40px;
+  height: 180px;
+  writing-mode: bt-lr;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.fader-footer {
+  text-align: center;
+  width: 100%;
+}
+
+.current-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.value-range {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--gray);
+}
+
+/* Notificações - Mantendo 2rem */
 .notifications-stack {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  z-index: 9999;
+  z-index: 2000;
   pointer-events: none;
 }
 
-/* CADA NOTIFICAÇÃO OCUPA LARGURA TOTAL */
 .notification-banner {
   pointer-events: auto;
-  width: 100%;
   background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin: 0 auto;
   animation: slideDown 0.3s ease-out;
-  border-radius: 0;
+  cursor: pointer;
+}
+
+.notification-banner.attention {
+  background: #fff5eb;
+  border-bottom: 2px solid var(--primary);
+}
+
+.notification-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.notification-message strong,
+.notification-message span {
+  font-size: 2rem !important;
+}
+
+.notification-icon {
+  font-size: 2rem;
 }
 
 @keyframes slideDown {
@@ -652,416 +1091,193 @@ input {
   }
 }
 
-.notification-banner.attention {
-  background: linear-gradient(135deg, #fff8f0, #ffe8d6);
-  border-bottom: 2px solid var(--accent);
-}
-
-.notification-banner.error {
-  background: linear-gradient(135deg, #fff0f0, #ffe0e0);
-  border-bottom: 2px solid var(--error);
-}
-
-.notification-banner-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 14px 24px;
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.notification-icon {
-  font-size: 1.3rem;
-  animation: bellRing 0.5s ease-out;
-  flex-shrink: 0;
-}
-
-@keyframes bellRing {
-  0%, 100% {
-    transform: rotate(0deg);
-  }
-  25% {
-    transform: rotate(15deg);
-  }
-  75% {
-    transform: rotate(-15deg);
-  }
-}
-
-.notification-message {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.notification-message strong {
-  color: var(--accent);
-  font-size: 2rem;
-  font-weight: 700;
-}
-
-.notification-message span {
-  color: var(--text);
-  font-size: 2rem;
-  font-weight: 500;
-}
-
 .notification-close {
   background: rgba(0, 0, 0, 0.05);
   border: none;
-  font-size: 1.3rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   cursor: pointer;
-  color: var(--muted);
-  padding: 0;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+  font-size: 24px;
+  transition: var(--transition);
 }
 
 .notification-close:hover {
   background: rgba(0, 0, 0, 0.1);
-  transform: scale(1.1);
-}
-
-.call-attention-btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: white;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.call-attention-btn:hover:not(:disabled) {
-  transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(188, 95, 44, 0.3);
-}
-
-.call-attention-btn:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-.call-attention-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-icon {
-  font-size: 1.2rem;
-}
-
-.sidebar,
-.workspace {
-  min-width: 0;
-}
-
-.sidebar {
-  display: grid;
-  gap: 18px;
-}
-
-.brand-card,
-.menu-card,
-.console-card,
-.feedback-card,
-.limits-card {
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  background: var(--panel);
-  backdrop-filter: blur(14px);
-  box-shadow: var(--shadow);
-}
-
-.brand-card,
-.menu-card,
-.feedback-card {
-  padding: 24px;
-}
-
-.brand-card h1,
-.workspace-header h2 {
-  margin: 0;
-}
-
-.brand-card p,
-.console-header p,
-.feedback-card {
-  color: var(--muted);
-  line-height: 1.6;
-}
-
-.eyebrow,
-.workspace-label,
-.menu-label {
-  display: inline-block;
-  margin-bottom: 10px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.menu-header,
-.workspace-header,
-.console-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.sync-badge {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(37, 107, 85, 0.12);
-  color: var(--success);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.auxiliar-nav {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.nav-item {
-  width: 100%;
-  padding: 16px 18px;
-  border: 1px solid rgba(75, 56, 38, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.56);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
-}
-
-.nav-item span,
-.nav-item small {
-  display: block;
-}
-
-.nav-item span {
-  font-weight: 700;
-}
-
-.nav-item small {
-  margin-top: 4px;
-  color: var(--muted);
-}
-
-.nav-item:hover {
-  transform: translateX(3px);
-  border-color: rgba(188, 95, 44, 0.34);
-}
-
-.nav-item.active {
-  background: linear-gradient(135deg, rgba(188, 95, 44, 0.18), rgba(255, 255, 255, 0.66));
-  border-color: rgba(188, 95, 44, 0.42);
-}
-
-.workspace {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 20px;
-}
-
-.workspace-header {
-  align-items: stretch;
-}
-
-.workspace-header h2 {
-  font-size: clamp(2rem, 4vw, 3rem);
-  line-height: 1;
-}
-
-.limits-card {
-  min-width: 180px;
-  padding: 18px 20px;
-  align-self: center;
-  text-align: center;
-  background: var(--panel-strong);
-}
-
-.limits-card span {
-  display: block;
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.limits-card strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 1.2rem;
-}
-
-.feedback-card {
-  display: grid;
-  place-items: center;
-  min-height: 220px;
-  text-align: center;
-  font-size: 1.02rem;
-}
-
-.error-card {
-  color: var(--error);
-}
-
-.console-card {
-  padding: 28px;
-}
-
-.faders-grid {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(110px, 1fr));
-  gap: 18px;
-  margin-top: 26px;
-}
-
-.fader-card {
-  display: grid;
-  justify-items: center;
-  gap: 10px;
-  padding: 18px 12px 16px;
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.64), rgba(233, 221, 208, 0.92));
-  border: 1px solid rgba(75, 56, 38, 0.08);
-}
-
-.fader-index,
-.fader-limits {
-  color: var(--muted);
-}
-
-.fader-index {
-  font-size: 0.84rem;
-  font-weight: 700;
-}
-
-.fader-track-wrap {
-  height: 260px;
-  display: grid;
-  place-items: center;
-}
-
-.fader-input {
-  -webkit-appearance: slider-vertical;
-  width: 42px;
-  height: 220px;
-  writing-mode: bt-lr;
-  accent-color: var(--accent);
-  cursor: grab;
-}
-
-.fader-input:active {
-  cursor: grabbing;
-}
-
-.fader-input:disabled {
-  cursor: progress;
-  opacity: 0.65;
-}
-
-.fader-value {
-  font-size: 1.4rem;
-}
-
-.empty-message {
-  margin: 18px 0 0;
-  color: var(--muted);
-  line-height: 1.6;
 }
 
 code {
+  background: #f0e8e0;
   padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(45, 36, 27, 0.08);
-  font-family: "Courier New", monospace;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 13px;
 }
 
-@media (max-width: 1280px) {
-  .faders-grid {
-    grid-template-columns: repeat(4, minmax(110px, 1fr));
+/* Mobile Menu Button - Bootstrap Style */
+.mobile-menu-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: 44px;
+  height: 44px;
+  background: var(--primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 1002;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.hamburger-icon {
+  width: 24px;
+  height: 18px;
+  position: relative;
+  display: inline-block;
+}
+
+.hamburger-icon span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: white;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+.hamburger-icon span:nth-child(1) {
+  top: 0;
+}
+
+.hamburger-icon span:nth-child(2) {
+  top: 8px;
+}
+
+.hamburger-icon span:nth-child(3) {
+  top: 16px;
+}
+
+.hamburger-icon.is-active span:nth-child(1) {
+  transform: rotate(45deg);
+  top: 8px;
+}
+
+.hamburger-icon.is-active span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-icon.is-active span:nth-child(3) {
+  transform: rotate(-45deg);
+  top: 8px;
+}
+
+/* Mobile Overlay */
+.mobile-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
-@media (max-width: 920px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
 
-  .workspace-header,
-  .console-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+/* Responsividade Mobile */
+@media (max-width: 768px) {
 
-  .limits-card {
-    width: 100%;
+  .mobile-menu-btn {
+    display: flex;
   }
   
-  .call-attention-btn {
-    width: 100%;
+  .sidebar-nav {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .sidebar-nav.mobile-open {
+    transform: translateX(0);
+  }
+  
+  .main-content {
+    margin-top: 10px;
+    margin-left: 0 !important;
+    padding: 16px;
+  }
+  
+  .main-content.mobile-menu-open {
+    filter: blur(2px);
+    pointer-events: none;
+  }
+  
+  .content-header {
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 40px;
+  }
+  
+  .header-actions {
+    justify-content: stretch;
+  }
+  
+  .attention-btn {
     justify-content: center;
   }
   
-  .notification-banner-content {
-    padding: 12px 16px;
-    gap: 12px;
-  }
-  
-  .notification-message {
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-  }
-}
-
-@media (max-width: 640px) {
-  .app-shell {
-    padding: 16px;
-  }
-
-  .brand-card,
-  .menu-card,
-  .console-card,
-  .feedback-card {
-    padding: 20px;
-  }
-
-  .faders-grid {
-    grid-template-columns: repeat(2, minmax(110px, 1fr));
-  }
-  
-  .notification-banner-content {
-    padding: 10px 12px;
+  .notification-message strong,
+  .notification-message span {
+    font-size: 2rem !important;
   }
   
   .notification-icon {
-    font-size: 1.1rem;
+    font-size: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    margin-top: 15px;
+    padding: 12px;
   }
   
-  .notification-message span {
-    font-size: 0.85rem;
+  .header-title h1 {
+    font-size: 24px;
   }
+  
+  .faders-container {
+    padding: 16px;
+  }
+  
+  .fader-wrapper {
+    height: 160px;
+  }
+  
+  .fader-input {
+    height: 140px;
+  }
+  
+  .notification-message strong,
+  .notification-message span {
+    font-size: 2rem !important;
+  }
+  
+  .notification-icon {
+    font-size: 1.2rem;
+  }
+
 }
 </style>
