@@ -1,5 +1,25 @@
 <template>
   <div class="app-shell">
+    <!-- MÚLTIPLAS NOTIFICAÇÕES EM FAIXA COMPLETA -->
+    <div class="notifications-stack">
+      <div 
+        v-for="notif in notifications"
+        :key="notif.id"
+        class="notification-banner"
+        :class="notif.type"
+        @click="removeNotification(notif.id)"
+      >
+        <div class="notification-banner-content">
+          <span class="notification-icon">{{ notif.type === 'attention' ? '🔔' : 'ℹ️' }}</span>
+          <div class="notification-message">
+            <strong v-if="notif.type === 'attention'">Atenção!</strong>
+            <span>{{ notif.message }}</span>
+          </div>
+          <button class="notification-close" @click.stop="removeNotification(notif.id)">×</button>
+        </div>
+      </div>
+    </div>
+
     <aside class="sidebar">
       <div class="brand-card">
         <span class="eyebrow">Controle de Som</span>
@@ -50,6 +70,16 @@
           <span>Intervalo atual</span>
           <strong>{{ globalLimits.min }} a {{ globalLimits.max }}</strong>
         </div>
+
+        <button 
+          v-if="selectedAuxiliar" 
+          class="call-attention-btn"
+          @click="callAttention"
+          :disabled="isCallingAttention"
+        >
+          <span class="btn-icon">🔔</span>
+          Chamar Atenção
+        </button>
       </header>
 
       <section v-if="errorMessage" class="feedback-card error-card">
@@ -109,7 +139,7 @@
 </template>
 
 <script>
-import { doc, onSnapshot, collection, updateDoc } from 'firebase/firestore'
+import { doc, onSnapshot, collection, updateDoc, addDoc, query, orderBy, deleteDoc } from 'firebase/firestore'
 import { db } from './firebase'
 
 const CHANNEL_KEYS = Array.from({ length: 16 }, (_, index) => String(index + 1))
@@ -223,10 +253,14 @@ export default {
       errorMessage: '',
       unsubscribeAuxiliares: null,
       unsubscribeLimits: null,
+      unsubscribeNotifications: null,
       isDragging: false,
       currentDragAuxiliar: null,
       currentDragChannel: null,
-      currentDragFaderRect: null
+      currentDragFaderRect: null,
+      notifications: [],
+      isCallingAttention: false,
+      notificationTimeouts: new Map()
     }
   },
   computed: {
@@ -250,6 +284,7 @@ export default {
   mounted() {
     this.subscribeToLimits()
     this.subscribeToAuxiliares()
+    this.subscribeToNotifications()
   },
   beforeUnmount() {
     if (this.unsubscribeAuxiliares) {
@@ -259,6 +294,13 @@ export default {
     if (this.unsubscribeLimits) {
       this.unsubscribeLimits()
     }
+
+    if (this.unsubscribeNotifications) {
+      this.unsubscribeNotifications()
+    }
+    
+    this.notificationTimeouts.forEach(timeout => clearTimeout(timeout))
+    this.notificationTimeouts.clear()
     
     this.stopDrag()
   },
@@ -307,6 +349,122 @@ export default {
         }
       )
     },
+    subscribeToNotifications() {
+      const notificationsRef = collection(db, 'Notificacoes')
+      const q = query(notificationsRef, orderBy('timestamp', 'desc'))
+
+      this.unsubscribeNotifications = onSnapshot(
+        q,
+        (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              const data = change.doc.data()
+              const notification = {
+                id: change.doc.id,
+                message: data.message,
+                type: data.type || 'attention',
+                timestamp: data.timestamp,
+                auxiliarId: data.auxiliarId
+              }
+              
+              if (!this.notifications.find(n => n.id === notification.id)) {
+                this.addNotificationToStack(notification)
+              }
+            }
+            
+            if (change.type === 'removed') {
+              this.removeNotificationById(change.doc.id)
+            }
+          })
+        },
+        (error) => {
+          console.error('Erro ao escutar notificações:', error)
+        }
+      )
+    },
+    addNotificationToStack(notification) {
+      this.notifications.unshift(notification)
+      
+      const timeout = setTimeout(() => {
+        this.removeNotification(notification.id)
+      }, 5000)
+      
+      this.notificationTimeouts.set(notification.id, timeout)
+      
+      if (this.notifications.length > 5) {
+        const oldest = this.notifications.pop()
+        this.removeNotification(oldest.id)
+      }
+    },
+    async callAttention() {
+      if (!this.selectedAuxiliar || this.isCallingAttention) return
+      
+      this.isCallingAttention = true
+      
+      try {
+        const notificationsRef = collection(db, 'Notificacoes')
+        
+        await addDoc(notificationsRef, {
+          auxiliarId: this.selectedAuxiliar.id,
+          message: `${this.selectedAuxiliar.id} chamou atenção!!!`,
+          type: 'attention',
+          timestamp: Date.now()
+        })
+        
+        setTimeout(() => {
+          this.isCallingAttention = false
+        }, 3000)
+        
+      } catch (error) {
+        console.error('Erro ao chamar atenção:', error)
+        this.addManualNotification('Erro ao enviar notificação. Tente novamente.', 'error')
+        this.isCallingAttention = false
+      }
+    },
+    addManualNotification(message, type) {
+      const tempId = `temp_${Date.now()}_${Math.random()}`
+      const notification = {
+        id: tempId,
+        message: message,
+        type: type,
+        timestamp: Date.now()
+      }
+      
+      this.notifications.unshift(notification)
+      
+      const timeout = setTimeout(() => {
+        this.removeNotification(tempId)
+      }, 5000)
+      
+      this.notificationTimeouts.set(tempId, timeout)
+    },
+    async removeNotification(notificationId) {
+      if (this.notificationTimeouts.has(notificationId)) {
+        clearTimeout(this.notificationTimeouts.get(notificationId))
+        this.notificationTimeouts.delete(notificationId)
+      }
+      
+      this.notifications = this.notifications.filter(n => n.id !== notificationId)
+      
+      if (notificationId.startsWith('temp_')) {
+        return
+      }
+      
+      try {
+        const notificationRef = doc(db, 'Notificacoes', notificationId)
+        await deleteDoc(notificationRef)
+      } catch (error) {
+        console.error('Erro ao deletar notificação:', error)
+      }
+    },
+    removeNotificationById(notificationId) {
+      if (this.notificationTimeouts.has(notificationId)) {
+        clearTimeout(this.notificationTimeouts.get(notificationId))
+        this.notificationTimeouts.delete(notificationId)
+      }
+      
+      this.notifications = this.notifications.filter(n => n.id !== notificationId)
+    },
     channelUniqueKey(auxiliarId, channelKey) {
       return `${auxiliarId}:${channelKey}`
     },
@@ -343,7 +501,6 @@ export default {
       event.preventDefault()
       event.stopPropagation()
       
-      // Pega o elemento fader-card e suas dimensões
       const faderCard = event.target.closest('.fader-card')
       if (!faderCard) return
       
@@ -352,21 +509,17 @@ export default {
       this.currentDragChannel = channelKey
       this.currentDragFaderRect = faderCard.getBoundingClientRect()
       
-      // Calcula o valor inicial baseado na posição do clique
       this.updateValueFromMousePosition(event.clientY)
       
-      // Adiciona listeners globais
       window.addEventListener('mousemove', this.onDrag)
       window.addEventListener('mouseup', this.stopDrag)
       
-      // Previne seleção de texto durante o arrasto
       document.body.style.userSelect = 'none'
     },
     
     onDrag(event) {
       if (!this.isDragging) return
       
-      // Atualiza a posição do retângulo em tempo real (caso a página role)
       const faderCard = document.querySelector(`.fader-card[data-auxiliar="${this.currentDragAuxiliar}"][data-channel="${this.currentDragChannel}"]`)
       if (faderCard) {
         this.currentDragFaderRect = faderCard.getBoundingClientRect()
@@ -388,29 +541,22 @@ export default {
     updateValueFromMousePosition(mouseY) {
       if (!this.currentDragFaderRect) return
       
-      // Encontra o canal atual
       const channel = this.selectedAuxiliar?.channels.find(c => c.key === this.currentDragChannel)
       if (!channel) return
       
-      // Calcula a posição do mouse em relação ao fader-card
       let mouseYRelative = mouseY
-      
-      // Permite arrastar mesmo fora do card (até 50px para fora)
       mouseYRelative = Math.max(this.currentDragFaderRect.top - 50, Math.min(this.currentDragFaderRect.bottom + 50, mouseYRelative))
       
-      // Calcula o valor (0 = topo = max, 1 = base = min)
       let percent = (this.currentDragFaderRect.bottom - mouseYRelative) / this.currentDragFaderRect.height
       percent = Math.max(0, Math.min(1, percent))
       
       const value = Math.round(channel.min + (channel.max - channel.min) * percent)
       
-      // Encontra o input element e atualiza
       const faderCard = document.querySelector(`.fader-card[data-auxiliar="${this.currentDragAuxiliar}"][data-channel="${this.currentDragChannel}"]`)
       if (faderCard) {
         const inputElement = faderCard.querySelector('.fader-input')
         if (inputElement && parseInt(inputElement.value) !== value) {
           inputElement.value = value
-          // Cria um evento fake e chama o handler existente
           const fakeEvent = { target: { value: value } }
           this.handleChannelInput(this.currentDragAuxiliar, this.currentDragChannel, fakeEvent)
         }
@@ -468,6 +614,157 @@ input {
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 24px;
   padding: 24px;
+}
+
+/* CONTAINER DE NOTIFICAÇÕES - AGORA OCUPA LARGURA TOTAL */
+.notifications-stack {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* CADA NOTIFICAÇÃO OCUPA LARGURA TOTAL */
+.notification-banner {
+  pointer-events: auto;
+  width: 100%;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  animation: slideDown 0.3s ease-out;
+  border-radius: 0;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.notification-banner.attention {
+  background: linear-gradient(135deg, #fff8f0, #ffe8d6);
+  border-bottom: 2px solid var(--accent);
+}
+
+.notification-banner.error {
+  background: linear-gradient(135deg, #fff0f0, #ffe0e0);
+  border-bottom: 2px solid var(--error);
+}
+
+.notification-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 14px 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.notification-icon {
+  font-size: 1.3rem;
+  animation: bellRing 0.5s ease-out;
+  flex-shrink: 0;
+}
+
+@keyframes bellRing {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(15deg);
+  }
+  75% {
+    transform: rotate(-15deg);
+  }
+}
+
+.notification-message {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.notification-message strong {
+  color: var(--accent);
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.notification-message span {
+  color: var(--text);
+  font-size: 2rem;
+  font-weight: 500;
+}
+
+.notification-close {
+  background: rgba(0, 0, 0, 0.05);
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.notification-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(1.1);
+}
+
+.call-attention-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.call-attention-btn:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(188, 95, 44, 0.3);
+}
+
+.call-attention-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.call-attention-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  font-size: 1.2rem;
 }
 
 .sidebar,
@@ -721,6 +1018,22 @@ code {
   .limits-card {
     width: 100%;
   }
+  
+  .call-attention-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .notification-banner-content {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+  
+  .notification-message {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -737,6 +1050,18 @@ code {
 
   .faders-grid {
     grid-template-columns: repeat(2, minmax(110px, 1fr));
+  }
+  
+  .notification-banner-content {
+    padding: 10px 12px;
+  }
+  
+  .notification-icon {
+    font-size: 1.1rem;
+  }
+  
+  .notification-message span {
+    font-size: 0.85rem;
   }
 }
 </style>
