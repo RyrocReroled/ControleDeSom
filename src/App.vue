@@ -78,6 +78,8 @@
             v-for="channel in selectedAuxiliar.channels"
             :key="channel.key"
             class="fader-card"
+            :data-auxiliar="selectedAuxiliar.id"
+            :data-channel="channel.key"
           >
             <span class="fader-index">Canal {{ channel.key }}</span>
 
@@ -93,6 +95,7 @@
                 :value="channel.value"
                 :disabled="pendingChannel === channelUniqueKey(selectedAuxiliar.id, channel.key)"
                 @input="handleChannelInput(selectedAuxiliar.id, channel.key, $event)"
+                @mousedown="startDragFromInput($event, selectedAuxiliar.id, channel.key)"
               />
             </div>
 
@@ -219,7 +222,11 @@ export default {
       pendingChannel: '',
       errorMessage: '',
       unsubscribeAuxiliares: null,
-      unsubscribeLimits: null
+      unsubscribeLimits: null,
+      isDragging: false,
+      currentDragAuxiliar: null,
+      currentDragChannel: null,
+      currentDragFaderRect: null
     }
   },
   computed: {
@@ -252,6 +259,8 @@ export default {
     if (this.unsubscribeLimits) {
       this.unsubscribeLimits()
     }
+    
+    this.stopDrag()
   },
   methods: {
     subscribeToLimits() {
@@ -327,6 +336,83 @@ export default {
       } finally {
         if (this.pendingChannel === channelId) {
           this.pendingChannel = ''
+        }
+      }
+    },
+    startDragFromInput(event, auxiliarId, channelKey) {
+      event.preventDefault()
+      event.stopPropagation()
+      
+      // Pega o elemento fader-card e suas dimensões
+      const faderCard = event.target.closest('.fader-card')
+      if (!faderCard) return
+      
+      this.isDragging = true
+      this.currentDragAuxiliar = auxiliarId
+      this.currentDragChannel = channelKey
+      this.currentDragFaderRect = faderCard.getBoundingClientRect()
+      
+      // Calcula o valor inicial baseado na posição do clique
+      this.updateValueFromMousePosition(event.clientY)
+      
+      // Adiciona listeners globais
+      window.addEventListener('mousemove', this.onDrag)
+      window.addEventListener('mouseup', this.stopDrag)
+      
+      // Previne seleção de texto durante o arrasto
+      document.body.style.userSelect = 'none'
+    },
+    
+    onDrag(event) {
+      if (!this.isDragging) return
+      
+      // Atualiza a posição do retângulo em tempo real (caso a página role)
+      const faderCard = document.querySelector(`.fader-card[data-auxiliar="${this.currentDragAuxiliar}"][data-channel="${this.currentDragChannel}"]`)
+      if (faderCard) {
+        this.currentDragFaderRect = faderCard.getBoundingClientRect()
+      }
+      
+      this.updateValueFromMousePosition(event.clientY)
+    },
+    
+    stopDrag() {
+      this.isDragging = false
+      this.currentDragAuxiliar = null
+      this.currentDragChannel = null
+      this.currentDragFaderRect = null
+      window.removeEventListener('mousemove', this.onDrag)
+      window.removeEventListener('mouseup', this.stopDrag)
+      document.body.style.userSelect = ''
+    },
+    
+    updateValueFromMousePosition(mouseY) {
+      if (!this.currentDragFaderRect) return
+      
+      // Encontra o canal atual
+      const channel = this.selectedAuxiliar?.channels.find(c => c.key === this.currentDragChannel)
+      if (!channel) return
+      
+      // Calcula a posição do mouse em relação ao fader-card
+      let mouseYRelative = mouseY
+      
+      // Permite arrastar mesmo fora do card (até 50px para fora)
+      mouseYRelative = Math.max(this.currentDragFaderRect.top - 50, Math.min(this.currentDragFaderRect.bottom + 50, mouseYRelative))
+      
+      // Calcula o valor (0 = topo = max, 1 = base = min)
+      let percent = (this.currentDragFaderRect.bottom - mouseYRelative) / this.currentDragFaderRect.height
+      percent = Math.max(0, Math.min(1, percent))
+      
+      const value = Math.round(channel.min + (channel.max - channel.min) * percent)
+      
+      // Encontra o input element e atualiza
+      const faderCard = document.querySelector(`.fader-card[data-auxiliar="${this.currentDragAuxiliar}"][data-channel="${this.currentDragChannel}"]`)
+      if (faderCard) {
+        const inputElement = faderCard.querySelector('.fader-input')
+        if (inputElement && parseInt(inputElement.value) !== value) {
+          inputElement.value = value
+          // Cria um evento fake e chama o handler existente
+          const fakeEvent = { target: { value: value } }
+          this.handleChannelInput(this.currentDragAuxiliar, this.currentDragChannel, fakeEvent)
         }
       }
     }
@@ -586,7 +672,11 @@ input {
   height: 220px;
   writing-mode: bt-lr;
   accent-color: var(--accent);
-  cursor: pointer;
+  cursor: grab;
+}
+
+.fader-input:active {
+  cursor: grabbing;
 }
 
 .fader-input:disabled {
