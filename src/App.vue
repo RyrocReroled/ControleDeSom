@@ -51,9 +51,6 @@
               @click="selectAuxiliar(auxiliar.id)"
             >
               <span class="nav-text">{{ auxiliar.id }}</span>
-              <span class="nav-badge" v-if="activeChannelsCount(auxiliar) > 0">
-                {{ activeChannelsCount(auxiliar) }}
-              </span>
             </button>
           </div>
         </div>
@@ -126,7 +123,7 @@
             :data-channel="channel.key"
           >
             <div class="fader-header">
-              <span class="channel-number">Canal {{ channel.key }}</span>
+              <span class="channel-number">{{getIdentificadorCanal(channel.key)}}</span>
             </div>
 
             <div class="fader-wrapper">
@@ -146,10 +143,7 @@
 
             <div class="fader-footer">
               <strong class="current-value">{{ channel.value }}</strong>
-              <div class="value-range">
-                <span>{{ channel.min }}</span>
-                <span>{{ channel.max }}</span>
-              </div>
+              <span class="channel-number">Canal {{ channel.key }}</span>
             </div>
           </div>
         </div>
@@ -264,6 +258,7 @@ export default {
   data() {
     return {
       auxiliaresRaw: [],
+      identificadoresRaw: [],
       limitsMap: {
         global: DEFAULT_LIMITS,
         perChannel: Object.fromEntries(CHANNEL_KEYS.map((key) => [key, DEFAULT_LIMITS]))
@@ -310,6 +305,7 @@ export default {
     this.subscribeToLimits()
     this.subscribeToAuxiliares()
     this.subscribeToNotifications()
+    this.subscribeToIdentificadorCanais()
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.checkMobile)
@@ -378,6 +374,34 @@ export default {
         }
       )
     },
+    subscribeToIdentificadorCanais() {
+      const identificadoresRef = collection(db, 'IdentificadorCanais')
+
+      this.unsubscribeAuxiliares = onSnapshot(
+        identificadoresRef,
+        (snapshot) => {
+          snapshot.forEach((doc) => {
+            this.identificadoresRaw.push({
+              id: doc.id,
+              ...doc.data()
+            })
+          })
+          this.errorMessage = ''
+        },
+        () => {
+          this.errorMessage =
+            'Erro ao carregar identificadores. Verifique as permissões do Firestore.'
+        }
+      )
+    },
+      getIdentificadorCanal(numero){
+      let identificador = this.identificadoresRaw.find(i=>i.numero==numero);
+      if (identificador != null){
+        return identificador.legenda;
+      }else{
+        return "Canal " + numero;
+      }
+      },
     subscribeToAuxiliares() {
       const auxiliaresRef = collection(db, 'Auxiliares')
 
