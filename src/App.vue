@@ -155,6 +155,7 @@
 <script>
 import { doc, onSnapshot, collection, updateDoc, addDoc, query, orderBy, deleteDoc } from 'firebase/firestore'
 import { db } from './firebase'
+import  * as sounds  from 'simple-notification-sounds'
 
 const CHANNEL_KEYS = Array.from({ length: 16 }, (_, index) => String(index + 1))
 const DEFAULT_LIMITS = { min: -100, max: 100 }
@@ -447,6 +448,7 @@ export default {
               if (!this.notifications.find(n => n.id === notification.id)) {
                 this.addNotificationToStack(notification)
               }
+              sounds.playAttention('long');
             }
             
             if (change.type === 'removed') {
@@ -487,7 +489,6 @@ export default {
           type: 'attention',
           timestamp: Date.now()
         })
-        
         setTimeout(() => {
           this.isCallingAttention = false
         }, 3000)
