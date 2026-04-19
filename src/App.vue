@@ -741,7 +741,7 @@ html.app-dark code {
   
   .main-content {
     margin-left: 0 !important;
-    padding: 28px 24px 32px 24px;
+    padding: 25px 24px 32px 24px;
   }
   
   .main-content.mobile-menu-open {
@@ -752,7 +752,7 @@ html.app-dark code {
 
 @media (max-width: 480px) {
   .main-content {
-    padding: 28px 16px 24px 16px;
+    padding: 25px 16px 24px 16px;
   }
 }
 </style>
