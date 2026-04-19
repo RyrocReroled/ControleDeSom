@@ -740,9 +740,8 @@ html.app-dark code {
   }
   
   .main-content {
-    margin-top: 20px;
     margin-left: 0 !important;
-    padding: 80px 24px 32px 24px;
+    padding: 30px 24px 32px 24px;
   }
   
   .main-content.mobile-menu-open {
@@ -753,7 +752,7 @@ html.app-dark code {
 
 @media (max-width: 480px) {
   .main-content {
-    padding: 80px 16px 24px 16px;
+    padding: 30px 16px 24px 16px;
   }
 }
 </style>
