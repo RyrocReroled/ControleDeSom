@@ -11,8 +11,12 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "@primeuix/themes": "^2.0.3",
+    "@primevue/themes": "^4.5.4",
     "core-js": "^3.8.3",
     "firebase": "^12.12.0",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.5.5",
     "simple-notification-sounds": "^1.0.0",
     "vue": "^3.2.13"
   },

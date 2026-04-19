@@ -1,108 +1,43 @@
 <template>
   <div class="app-shell">
-    <!-- MÚLTIPLAS NOTIFICAÇÕES EM FAIXA COMPLETA -->
-    <div class="notifications-stack">
-      <div 
-        v-for="notif in notifications"
-        :key="notif.id"
-        class="notification-banner"
-        :class="notif.type"
-        @click="removeNotification(notif.id)"
-      >
-        <div class="notification-banner-content">
-          <span class="notification-icon">{{ notif.type === 'attention' ? '🔔' : 'ℹ️' }}</span>
-          <div class="notification-message">
-            <strong v-if="notif.type === 'attention'">Atenção! </strong>
-            <span>{{ notif.message }}</span>
-          </div>
-          <button class="notification-close" @click.stop="removeNotification(notif.id)">×</button>
-        </div>
-      </div>
-    </div>
+    <NotificationsStack
+      :notifications="notifications"
+      @remove="removeNotification"
+    />
 
-    <!-- Navbar Lateral Desktop (sempre visível) -->
-    <nav class="sidebar-nav" :class="{ 'mobile-open': mobileMenuOpen }">
-      <div class="nav-header">
-        <div class="logo-area">
-          <div class="logo-text">
-            <span class="logo-title">Mesa de Som</span>
-            <span class="logo-subtitle">Auxiliares</span>
-          </div>
-        </div>
-        <!-- Botão de fechar no mobile quando menu está aberto -->
-        <button class="mobile-close-btn" v-if="isMobile && mobileMenuOpen" @click="closeMobileMenu">
-          ✕
-        </button>
-      </div>
-
-      <div class="nav-content">
-        <div class="nav-section">
-          <div class="section-label">
-            <span>Auxiliares</span>
-            <span class="badge">{{ auxiliares.length }}</span>
-          </div>
-          
-          <div class="nav-items">
-            <button
-              v-for="auxiliar in auxiliares"
-              :key="auxiliar.id"
-              class="nav-link"
-              :class="{ active: auxiliar.id === selectedAuxiliarId }"
-              @click="selectAuxiliar(auxiliar.id)"
-            >
-              <span class="nav-text">{{ auxiliar.id }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="nav-footer">
-          <div class="status-info">
-            <div class="status-dot" :class="{ syncing: pendingChannel }"></div>
-            <span class="status-text">{{ syncLabel }}</span>
-          </div>
-        </div>
-      </div>
-    </nav>
+    <SidebarNav
+      :mobileMenuOpen="mobileMenuOpen"
+      :isMobile="isMobile"
+      :auxiliares="auxiliares"
+      :selectedAuxiliarId="selectedAuxiliarId"
+      :pendingChannel="pendingChannel"
+      :syncLabel="syncLabel"
+      :isDarkMode="isDarkMode"
+      @close="closeMobileMenu"
+      @select="selectAuxiliar"
+      @toggle-theme="toggleDarkMode"
+    />
 
     <!-- Botão Hamburguer Mobile (visível apenas no mobile) -->
-    <button v-if="!mobileMenuOpen" class="mobile-menu-btn" @click="toggleMobileMenu">
-      <span class="hamburger-icon">
-        <span></span>
-        <span></span>
-        <span></span>
-      </span>
-    </button>
+    <Button 
+      v-if="!mobileMenuOpen" 
+      icon="pi pi-bars" 
+      class="mobile-menu-btn p-button-rounded p-button-primary" 
+      @click="toggleMobileMenu" 
+      aria-label="Menu"
+    />
 
     <!-- Overlay Mobile -->
     <div class="mobile-overlay" v-if="mobileMenuOpen" @click="closeMobileMenu"></div>
 
     <!-- Conteúdo Principal -->
     <main class="main-content" :class="{ 'mobile-menu-open': mobileMenuOpen }">
-      <header class="content-header">
-        <div class="header-title">
-          <h1>{{ selectedAuxiliar ? selectedAuxiliar.id : 'Selecione um auxiliar' }}</h1>
-          <p class="header-description" v-if="selectedAuxiliar">
-            Controle dos canais 1 a 16
-          </p>
-        </div>
-
-        <div class="header-actions">
-          <div class="limits-card">
-            <span>Intervalo</span>
-            <strong>{{ globalLimits.min }} a {{ globalLimits.max }}</strong>
-          </div>
-
-          <button 
-            v-if="selectedAuxiliar" 
-            class="attention-btn"
-            @click="callAttention"
-            :disabled="isCallingAttention"
-          >
-            <span>🔔</span>
-            <span>Chamar Atenção</span>
-          </button>
-        </div>
-      </header>
+      <AppHeader
+        :selectedAuxiliar="selectedAuxiliar"
+        :globalLimits="globalLimits"
+        :isCallingAttention="isCallingAttention"
+        @call-attention="callAttention"
+      />
 
       <section v-if="errorMessage" class="feedback-card error">
         {{ errorMessage }}
@@ -113,41 +48,14 @@
         <p>Crie documentos como <code>Auxiliar1</code>, <code>Auxiliar2</code> na coleção <code>Auxiliares</code></p>
       </section>
 
-      <section v-else class="faders-container">
-        <div class="faders-grid">
-          <div
-            v-for="channel in selectedAuxiliar.channels"
-            :key="channel.key"
-            class="fader-card"
-            :data-auxiliar="selectedAuxiliar.id"
-            :data-channel="channel.key"
-          >
-            <div class="fader-header">
-              <span class="channel-number">{{getIdentificadorCanal(channel.key)}}</span>
-            </div>
-
-            <div class="fader-wrapper">
-              <input
-                class="fader-input"
-                type="range"
-                orient="vertical"
-                :min="channel.min"
-                :max="channel.max"
-                :step="1"
-                :value="channel.value"
-                :disabled="pendingChannel === channelUniqueKey(selectedAuxiliar.id, channel.key)"
-                @input="handleChannelInput(selectedAuxiliar.id, channel.key, $event)"
-                @mousedown="startDragFromInput($event, selectedAuxiliar.id, channel.key)"
-              />
-            </div>
-
-            <div class="fader-footer">
-              <strong class="current-value">{{ channel.value }}</strong>
-              <span class="channel-number">Canal {{ channel.key }}</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      <FaderGrid
+        v-else
+        :selectedAuxiliar="selectedAuxiliar"
+        :pendingChannel="pendingChannel"
+        :getIdentificadorCanal="getIdentificadorCanal"
+        @channel-input="handleChannelInput"
+        @drag-start="startDragFromInput"
+      />
     </main>
   </div>
 </template>
@@ -156,6 +64,12 @@
 import { doc, onSnapshot, collection, updateDoc, addDoc, query, orderBy, deleteDoc } from 'firebase/firestore'
 import { db } from './firebase'
 import  * as sounds  from 'simple-notification-sounds'
+
+import NotificationsStack from './components/NotificationsStack.vue'
+import SidebarNav from './components/SidebarNav.vue'
+import AppHeader from './components/AppHeader.vue'
+import FaderGrid from './components/FaderGrid.vue'
+import Button from 'primevue/button'
 
 const CHANNEL_KEYS = Array.from({ length: 16 }, (_, index) => String(index + 1))
 const DEFAULT_LIMITS = { min: -100, max: 100 }
@@ -256,6 +170,13 @@ function normalizeAuxiliar(docSnapshot, limitsMap) {
 
 export default {
   name: 'App',
+  components: {
+    NotificationsStack,
+    SidebarNav,
+    AppHeader,
+    FaderGrid,
+    Button
+  },
   data() {
     return {
       auxiliaresRaw: [],
@@ -278,7 +199,8 @@ export default {
       isCallingAttention: false,
       notificationTimeouts: new Map(),
       isMobile: false,
-      mobileMenuOpen: false
+      mobileMenuOpen: false,
+      isDarkMode: false
     }
   },
   computed: {
@@ -302,6 +224,11 @@ export default {
   mounted() {
     this.checkMobile()
     window.addEventListener('resize', this.checkMobile)
+    
+    this.isDarkMode = localStorage.getItem('theme') === 'dark'
+    if (this.isDarkMode) {
+      document.documentElement.classList.add('app-dark')
+    }
     
     this.subscribeToLimits()
     this.subscribeToAuxiliares()
@@ -330,7 +257,7 @@ export default {
   },
   methods: {
     checkMobile() {
-      this.isMobile = window.innerWidth <= 768
+      this.isMobile = window.innerWidth <= 1024
       if (!this.isMobile) {
         this.mobileMenuOpen = false
         document.body.style.overflow = ''
@@ -348,6 +275,16 @@ export default {
     closeMobileMenu() {
       this.mobileMenuOpen = false
       document.body.style.overflow = ''
+    },
+    toggleDarkMode() {
+      this.isDarkMode = !this.isDarkMode
+      if (this.isDarkMode) {
+        document.documentElement.classList.add('app-dark')
+        localStorage.setItem('theme', 'dark')
+      } else {
+        document.documentElement.classList.remove('app-dark')
+        localStorage.setItem('theme', 'light')
+      }
     },
     selectAuxiliar(id) {
       this.selectedAuxiliarId = id
@@ -645,18 +582,40 @@ export default {
 </script>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
 :root {
-  --primary: #bc5f2c;
-  --primary-dark: #8f4218;
-  --primary-light: #e8a87b;
-  --dark: #2d241b;
-  --gray: #6f655c;
-  --gray-light: #e0d8d0;
-  --success: #256b55;
-  --error: #c53030;
-  --bg: #f5f0ea;
-  --sidebar-width: 260px;
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --sidebar-width: 280px;
+  --transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  
+  /* Verde Escuro / Emerald Palette para o App */
+  --p-primary-50: #ecfdf5;
+  --p-primary-100: #d1fae5;
+  --p-primary-200: #a7f3d0;
+  --p-primary-300: #6ee7b7;
+  --p-primary-400: #34d399;
+  --p-primary-500: #10b981; /* Verde Principal */
+  --p-primary-600: #059669;
+  --p-primary-700: #047857;
+  --p-primary-800: #065f46;
+  --p-primary-900: #064e3b;
+  --p-primary-950: #022c22;
+}
+
+html.app-dark {
+  /* Cinza Escuro moderno para o Dark Mode */
+  --p-surface-0: #ffffff;
+  --p-surface-50: #f8fafc;
+  --p-surface-100: #f1f5f9;
+  --p-surface-200: #e2e8f0;
+  --p-surface-300: #cbd5e1;
+  --p-surface-400: #94a3b8;
+  --p-surface-500: #64748b;
+  --p-surface-600: #475569;
+  --p-surface-700: #334155;
+  --p-surface-800: #1e293b; /* Cinza claro no painel */
+  --p-surface-900: #0f172a; /* Cinza escuro profundo */
+  --p-surface-950: #020617;
 }
 
 * {
@@ -666,10 +625,17 @@ export default {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  background: linear-gradient(135deg, #f5f0ea 0%, #e8dfd7 100%);
-  color: var(--dark);
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background-color: var(--p-surface-100);
+  color: var(--p-surface-900);
   overflow-x: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+html.app-dark body {
+  background-color: var(--p-surface-900);
+  color: var(--p-surface-0);
 }
 
 .app-shell {
@@ -678,527 +644,70 @@ body {
   position: relative;
 }
 
-/* Navbar Lateral Desktop - Sempre visível */
-.sidebar-nav {
-  position: fixed;
-  left: 0;
-  top: 0;
-  height: 100vh;
-  width: var(--sidebar-width);
-  background: #2d241b;
-  display: flex;
-  flex-direction: column;
-  z-index: 1000;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-}
-
-.nav-header {
-  padding: 24px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.logo-text {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.logo-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: white;
-}
-
-.logo-subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-/* Botão de fechar mobile */
-.mobile-close-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  color: white;
-  font-size: 20px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition);
-}
-
-.mobile-close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.nav-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 20px 0;
-  overflow-y: auto;
-}
-
-.nav-section {
-  padding: 0 16px;
-}
-
-.section-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 8px;
-  margin-bottom: 16px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.badge {
-  background: rgba(188, 95, 44, 0.3);
-  color: var(--primary-light);
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-}
-
-.nav-items {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.nav-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px;
-  border-radius: 8px;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  transition: var(--transition);
-  width: 100%;
-  text-align: left;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.nav-link:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-}
-
-.nav-link.active {
-  background: var(--primary);
-  color: white;
-}
-
-.nav-text {
-  flex: 1;
-}
-
-.nav-badge {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  min-width: 24px;
-  text-align: center;
-}
-
-.nav-footer {
-  padding: 20px 16px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  margin-top: auto;
-}
-
-.status-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #10b981;
-  transition: var(--transition);
-}
-
-.status-dot.syncing {
-  background: #f59e0b;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.2); }
-}
-
-.status-text {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-}
-
 /* Conteúdo Principal Desktop */
 .main-content {
   flex: 1;
   margin-left: var(--sidebar-width);
-  padding: 24px 32px;
+  padding: 40px 56px;
   transition: var(--transition);
   min-height: 100vh;
 }
 
-/* Header */
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 32px;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.header-title h1 {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--dark);
-  margin-bottom: 8px;
-}
-
-.header-description {
-  color: var(--gray);
-  font-size: 14px;
-}
-
-.header-actions {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-}
-
-.limits-card {
-  background: white;
-  padding: 10px 20px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+/* Feedback Cards */
+.feedback-card {
+  background: var(--p-surface-0);
+  border-radius: 16px;
+  padding: 64px 40px;
   text-align: center;
-}
-
-.limits-card span {
-  display: block;
-  font-size: 11px;
-  color: var(--gray);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.limits-card strong {
-  font-size: 18px;
-  color: var(--primary);
-}
-
-.attention-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  background: var(--primary);
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-weight: 600;
-  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--p-surface-200);
   transition: var(--transition);
 }
 
-.attention-btn:hover:not(:disabled) {
-  background: var(--primary-dark);
-  transform: translateY(-1px);
-}
-
-.attention-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Feedback Cards */
-.feedback-card {
-  background: white;
-  border-radius: 12px;
-  padding: 48px 32px;
-  text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+html.app-dark .feedback-card {
+  background: var(--p-surface-900);
+  border-color: var(--p-surface-800);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
 .feedback-card.error {
-  background: #fee;
-  color: var(--error);
-  border-left: 3px solid var(--error);
+  border-top: 4px solid var(--p-red-500);
 }
 
 .feedback-card.info {
-  background: #e8f0fe;
+  border-top: 4px solid var(--p-blue-500);
 }
 
 .feedback-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-/* Faders Grid */
-.faders-container {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.faders-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 16px;
-}
-
-@media (min-width: 1600px) {
-  .faders-grid {
-    grid-template-columns: repeat(8, 1fr);
-  }
-}
-
-@media (max-width: 1200px) {
-  .faders-grid {
-    grid-template-columns: repeat(6, 1fr);
-  }
-}
-
-@media (max-width: 900px) {
-  .faders-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 600px) {
-  .faders-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.fader-card {
-  background: #faf8f6;
-  border-radius: 8px;
-  padding: 16px 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  transition: var(--transition);
-  border: 1px solid #e8e0d8;
-}
-
-.fader-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.fader-header {
-  text-align: center;
-}
-
-.channel-number {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--gray);
-}
-
-.fader-wrapper {
-  height: 200px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.fader-input {
-  -webkit-appearance: slider-vertical;
-  width: 40px;
-  height: 180px;
-  writing-mode: bt-lr;
-  accent-color: var(--primary);
-  cursor: pointer;
-}
-
-.fader-footer {
-  text-align: center;
-  width: 100%;
-}
-
-.current-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--primary);
-  display: block;
-  margin-bottom: 4px;
-}
-
-.value-range {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: var(--gray);
-}
-
-/* Notificações - Mantendo 2rem */
-.notifications-stack {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 2000;
-  pointer-events: none;
-}
-
-.notification-banner {
-  pointer-events: auto;
-  background: white;
-  margin: 0 auto;
-  animation: slideDown 0.3s ease-out;
-  cursor: pointer;
-}
-
-.notification-banner.attention {
-  background: #fff5eb;
-  border-bottom: 2px solid var(--primary);
-}
-
-.notification-banner-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 16px 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.notification-message strong,
-.notification-message span {
-  font-size: 2rem !important;
-}
-
-.notification-icon {
-  font-size: 2rem;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.notification-close {
-  background: rgba(0, 0, 0, 0.05);
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 24px;
-  transition: var(--transition);
-}
-
-.notification-close:hover {
-  background: rgba(0, 0, 0, 0.1);
+  font-size: 56px;
+  margin-bottom: 24px;
 }
 
 code {
-  background: #f0e8e0;
-  padding: 2px 8px;
-  border-radius: 4px;
+  background: var(--p-surface-200);
+  padding: 4px 10px;
+  border-radius: 6px;
   font-family: monospace;
-  font-size: 13px;
+  font-size: 14px;
+  color: var(--p-primary-500);
 }
 
-/* Mobile Menu Button - Bootstrap Style */
+html.app-dark code {
+  background: var(--p-surface-800);
+  color: var(--p-primary-400);
+}
+
+/* Mobile Menu Button */
 .mobile-menu-btn {
-  position: fixed;
+  position: fixed !important;
   top: 16px;
   left: 16px;
-  width: 44px;
-  height: 44px;
-  background: var(--primary);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
   z-index: 1002;
-  display: none;
-  align-items: center;
-  justify-content: center;
+  display: none !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.hamburger-icon {
-  width: 24px;
-  height: 18px;
-  position: relative;
-  display: inline-block;
-}
 
-.hamburger-icon span {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: white;
-  border-radius: 2px;
-  transition: all 0.3s ease;
-}
-
-.hamburger-icon span:nth-child(1) {
-  top: 0;
-}
-
-.hamburger-icon span:nth-child(2) {
-  top: 8px;
-}
-
-.hamburger-icon span:nth-child(3) {
-  top: 16px;
-}
-
-.hamburger-icon.is-active span:nth-child(1) {
-  transform: rotate(45deg);
-  top: 8px;
-}
-
-.hamburger-icon.is-active span:nth-child(2) {
-  opacity: 0;
-}
-
-.hamburger-icon.is-active span:nth-child(3) {
-  transform: rotate(-45deg);
-  top: 8px;
-}
 
 /* Mobile Overlay */
 .mobile-overlay {
@@ -1207,7 +716,8 @@ code {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
   z-index: 999;
   animation: fadeIn 0.3s ease;
 }
@@ -1223,86 +733,27 @@ code {
 
 
 /* Responsividade Mobile */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
 
   .mobile-menu-btn {
-    display: flex;
-  }
-  
-  .sidebar-nav {
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-  }
-  
-  .sidebar-nav.mobile-open {
-    transform: translateX(0);
+    display: inline-flex !important;
   }
   
   .main-content {
-    margin-top: 10px;
+    margin-top: 20px;
     margin-left: 0 !important;
-    padding: 16px;
+    padding: 80px 24px 32px 24px;
   }
   
   .main-content.mobile-menu-open {
-    filter: blur(2px);
+    filter: blur(4px);
     pointer-events: none;
-  }
-  
-  .content-header {
-    flex-direction: column;
-    align-items: stretch;
-    margin-top: 40px;
-  }
-  
-  .header-actions {
-    justify-content: stretch;
-  }
-  
-  .attention-btn {
-    justify-content: center;
-  }
-  
-  .notification-message strong,
-  .notification-message span {
-    font-size: 2rem !important;
-  }
-  
-  .notification-icon {
-    font-size: 2rem;
   }
 }
 
 @media (max-width: 480px) {
   .main-content {
-    margin-top: 15px;
-    padding: 12px;
+    padding: 80px 16px 24px 16px;
   }
-  
-  .header-title h1 {
-    font-size: 24px;
-  }
-  
-  .faders-container {
-    padding: 16px;
-  }
-  
-  .fader-wrapper {
-    height: 160px;
-  }
-  
-  .fader-input {
-    height: 140px;
-  }
-  
-  .notification-message strong,
-  .notification-message span {
-    font-size: 2rem !important;
-  }
-  
-  .notification-icon {
-    font-size: 1.2rem;
-  }
-
 }
 </style>
