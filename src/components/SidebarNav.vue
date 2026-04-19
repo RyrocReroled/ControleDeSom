@@ -238,7 +238,7 @@ html.app-dark .section-label {
 }
 
 .nav-footer {
-  padding: 24px 16px 32px;
+  padding: 10px 16px 32px;
   border-top: 1px solid var(--p-surface-200);
   margin-top: auto;
 }
